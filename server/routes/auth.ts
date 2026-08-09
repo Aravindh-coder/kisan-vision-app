@@ -1,0 +1,86 @@
+import express from 'express'
+import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
+import { db } from '../db/index'
+import { users } from '../db/schema'
+import { eq } from 'drizzle-orm'
+
+const router = express.Router()
+const JWT_SECRET = process.env.JWT_SECRET || 'kisan_secret'
+
+// Register
+router.post('/register', async (req, res) => {
+  try {
+    const { name, email, password, role } = req.body
+    const existing = await db.select().from(users).where(eq(users.email, email))
+    if (existing.length > 0) return res.status(400).json({ error: 'Email already exists' })
+    const hashed = await bcrypt.hash(password, 10)
+    await db.insert(users).values({ name, email, password: hashed, role: role || 'farmer' })
+    res.json({ message: 'User registered successfully' })
+  } catch {
+    res.status(500).json({ error: 'Registration failed' })
+  }
+})
+
+// Login
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body
+    const result = await db.select().from(users).where(eq(users.email, email))
+    if (result.length === 0) return res.status(401).json({ error: 'Invalid credentials' })
+    const user = result[0]
+    const valid = await bcrypt.compare(password, user.password)
+    if (!valid) return res.status(401).json({ error: 'Invalid credentials' })
+    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' })
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } })
+  } catch {
+    res.status(500).json({ error: 'Login failed' })
+  }
+})
+
+export default router
+
+router.get('/test-db', async (_req, res) => {
+  try {
+    const result = await db.select().from(users).limit(1)
+    res.json({ ok: true, count: result.length })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Database test failed'
+    res.status(500).json({ error: message })
+  }
+})
+
+router.get('/setup-db', async (_req, res) => {
+  try {
+    const { sql } = await import('drizzle-orm')
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL UNIQUE,
+      password VARCHAR(255) NOT NULL,
+      role VARCHAR(50) DEFAULT 'farmer',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`)
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS lands (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      farmer_name VARCHAR(255) NOT NULL,
+      phone VARCHAR(20),
+      email VARCHAR(255) NOT NULL,
+      land_name VARCHAR(255),
+      crop_type VARCHAR(100),
+      polygon_coords TEXT NOT NULL,
+      center_lat DOUBLE NOT NULL,
+      center_lon DOUBLE NOT NULL,
+      detected_location VARCHAR(500),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`)
+    try {
+      await db.execute(sql`ALTER TABLE lands ADD COLUMN lang VARCHAR(10) DEFAULT 'en'`)
+    } catch {
+      // column may already exist
+    }
+    res.json({ ok: true, message: 'Tables created' })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
