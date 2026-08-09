@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KISAN-VISION Weather Alert</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:system-ui,Arial,sans-serif; min-height:100vh; background:#000; color:#f0fdf4; }
+.bg-image { position:fixed; inset:0; z-index:0; background-image:url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1920&q=80'); background-size:cover; background-position:center; filter:brightness(0.3) saturate(0.8); }
+.bg-overlay { position:fixed; inset:0; z-index:1; background:linear-gradient(to bottom,rgba(1,10,1,0.75),rgba(1,20,5,0.5),rgba(1,10,1,0.9)); }
+@keyframes scan { 0%{top:0;opacity:0.8} 100%{top:100%;opacity:0} }
+.scanline { position:fixed; left:0; right:0; height:2px; z-index:2; background:linear-gradient(90deg,transparent,rgba(74,222,128,0.8),transparent); animation:scan 5s linear infinite; pointer-events:none; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+@keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+.page { position:relative; z-index:3; display:flex; align-items:center; justify-content:center; min-height:100vh; padding:24px; }
+.card { background:rgba(2,10,2,0.88); border:1px solid rgba(74,222,128,0.25); border-radius:22px; padding:34px; width:100%; max-width:460px; backdrop-filter:blur(24px); box-shadow:0 25px 80px rgba(0,0,0,0.7); animation:fadeUp 0.6s ease forwards; }
+.header { display:flex; align-items:center; gap:12px; margin-bottom:6px; }
+.icon-box { width:46px; height:46px; border-radius:13px; background:rgba(22,101,52,0.7); border:1px solid rgba(74,222,128,0.3); display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; }
+h2 { color:#4ade80; font-size:20px; font-weight:800; }
+.subtitle { color:#365f45; font-size:12px; margin-top:2px; }
+.divider { height:1px; margin:18px 0; background:linear-gradient(90deg,transparent,rgba(74,222,128,0.3),transparent); }
+.location-box { background:rgba(22,101,52,0.2); border:1px solid rgba(74,222,128,0.15); border-radius:12px; padding:12px 14px; margin-bottom:16px; }
+.loc-row { display:flex; align-items:center; gap:10px; }
+.loc-name { color:#4ade80; font-weight:700; font-size:14px; }
+.loc-coords { color:#374151; font-size:11px; margin-top:2px; }
+.loc-btn { margin-top:10px; width:100%; background:rgba(22,101,52,0.3); color:#4ade80; border:1px solid rgba(74,222,128,0.3); border-radius:8px; padding:9px; font-size:13px; font-weight:700; cursor:pointer; }
+.loc-btn:hover { background:rgba(22,101,52,0.5); }
+.map-box { display:none; margin-top:10px; border-radius:10px; overflow:hidden; border:1px solid rgba(74,222,128,0.2); }
+label { color:#4b5563; font-size:11px; display:block; margin-bottom:7px; font-weight:700; letter-spacing:0.08em; }
+input { width:100%; background:rgba(0,0,0,0.55); color:#f0fdf4; border:1px solid rgba(74,222,128,0.25); border-radius:10px; padding:13px 16px; font-size:16px; outline:none; transition:border 0.2s; margin-bottom:14px; }
+input:focus { border-color:#4ade80; }
+input::placeholder { color:#4b5563; }
+.btn-row { display:flex; gap:10px; margin-top:8px; }
+#send-btn { flex:1; background:#16a34a; color:#fff; border:none; border-radius:12px; padding:16px; font-size:16px; font-weight:800; cursor:pointer; transition:all 0.2s; }
+#send-btn:hover:not(:disabled) { background:#15803d; transform:translateY(-2px); box-shadow:0 6px 20px rgba(22,163,74,0.4); }
+#send-btn:disabled { cursor:wait; opacity:0.7; }
+#unsub-btn { background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.3); border-radius:12px; padding:16px 18px; font-size:14px; font-weight:800; cursor:pointer; }
+#unsub-btn:hover { background:rgba(239,68,68,0.3); }
+#success-box { display:none; flex-direction:column; align-items:center; background:rgba(5,46,22,0.95); border:2px solid #4ade80; border-radius:16px; padding:24px 20px; margin-bottom:16px; text-align:center; }
+.success-title { color:#4ade80; font-weight:800; font-size:18px; margin-bottom:6px; }
+.success-sub { color:#86efac; font-size:13px; margin-bottom:10px; }
+.includes { margin-top:18px; padding:14px; background:rgba(0,0,0,0.4); border-radius:10px; border:1px solid #0f1f0f; }
+.includes-title { color:#1f2d1f; font-size:10px; font-weight:700; letter-spacing:0.08em; margin-bottom:8px; }
+.includes p { color:#374151; font-size:12px; margin:5px 0; }
+.footer { color:#1a2e1a; font-size:11px; text-align:center; margin-top:16px; }
+.tab-row { display:flex; gap:8px; margin-bottom:16px; }
+.tab { flex:1; padding:9px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; border:1px solid rgba(74,222,128,0.2); background:transparent; color:#365f45; }
+.tab.active { background:rgba(22,101,52,0.4); color:#4ade80; border-color:rgba(74,222,128,0.4); }
+</style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+<div class="bg-image"></div>
+<div class="bg-overlay"></div>
+<div class="scanline"></div>
+
+<div class="page">
+  <div class="card">
+    <div class="header">
+      <div class="icon-box">🌦️</div>
+      <div>
+        <h2>Weather Alerts</h2>
+        <div class="subtitle">KISAN-VISION · Daily Farm Reports</div>
+      </div>
+    </div>
+    <div class="divider"></div>
+
+    <div class="location-box">
+      <div class="loc-row">
+        <span style="font-size:20px">📍</span>
+        <div>
+          <div class="loc-name" id="loc-name">Select your location</div>
+          <div class="loc-coords" id="loc-coords">Click below to pick location</div>
+        </div>
+      </div>
+      <button class="loc-btn" onclick="detectLocation()">📡 Use My Current Location</button>
+      <button class="loc-btn" style="margin-top:6px" onclick="toggleMap()">🗺️ Pick on Map</button>
+      <div class="map-box" id="map-box">
+        <div id="map-iframe" style="width:100%;height:280px;min-height:280px;"></div>
+      </div>
+    </div>
+
+    <div id="success-box">
+      <div style="font-size:48px;margin-bottom:10px">✅</div>
+      <div class="success-title" id="success-title">Subscribed!</div>
+      <div class="success-sub" id="success-msg">Daily reports will be sent every morning at 6 AM</div>
+    </div>
+
+    <div class="tab-row">
+      <button class="tab active" id="tab-sub" onclick="showTab('sub')">📲 Subscribe</button>
+      <button class="tab" id="tab-unsub" onclick="showTab('unsub')">🚫 Unsubscribe</button>
+    </div>
+
+    <div id="panel-sub">
+      <label>📱 WHATSAPP NUMBER</label>
+      <input type="tel" id="phone" placeholder="+919876543210">
+      <label>📧 EMAIL <span style="color:#1f2937;font-weight:400">(optional)</span></label>
+      <input type="email" id="email" placeholder="farmer@email.com">
+      <button type="button" id="send-btn" onclick="sendReport()">📲 Subscribe & Send First Report</button>
+    </div>
+
+    <div id="panel-unsub" style="display:none">
+      <label>📱 WHATSAPP / 📧 EMAIL TO UNSUBSCRIBE</label>
+      <input type="text" id="unsub-contact" placeholder="+919876543210 or email@example.com">
+      <button type="button" id="unsub-btn" onclick="unsubscribe()">🚫 Unsubscribe from Daily Reports</button>
+    </div>
+
+    <div class="includes">
+      <div class="includes-title">DAILY REPORT INCLUDES</div>
+      <p>🌡️ Temperature & humidity forecast</p>
+      <p>🌿 NDVI vegetation health index</p>
+      <p>💧 Irrigation advisory</p>
+      <p>🌾 Crop & harvest estimate</p>
+      <p>⚠️ Disease risk alert</p>
+    </div>
+    <div class="footer">Free · Sentinel-2 Satellite · OpenWeatherMap · Daily at 6 AM</div>
+  </div>
+</div>
+
+<script>
+var lat = 0, lon = 0;
+var mapShowing = false;
+
+window.addEventListener('load', function() {
+  var p2 = new URLSearchParams(window.location.search);
+  if (!p2.get('lat') && navigator.geolocation) {
+    document.getElementById('loc-name').textContent = 'Detecting location...';
+    navigator.geolocation.getCurrentPosition(function(p) {
+      lat = p.coords.latitude;
+      lon = p.coords.longitude;
+      fetch('https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lon + '&format=json')
+        .then(function(r){return r.json();})
+        .then(function(d){
+          var name = (d.address && (d.address.suburb || d.address.city || d.address.town || d.address.village)) || (lat.toFixed(4)+'N');
+          document.getElementById('loc-name').textContent = name;
+          document.getElementById('loc-coords').textContent = lat.toFixed(4)+'N · '+lon.toFixed(4)+'E';
+        }).catch(function(){
+          document.getElementById('loc-name').textContent = lat.toFixed(4)+'N, '+lon.toFixed(4)+'E';
+          document.getElementById('loc-coords').textContent = 'GPS detected';
+        });
+    }, function(){
+      document.getElementById('loc-name').textContent = 'Select your location';
+      document.getElementById('loc-coords').textContent = 'Click "Use My Current Location" below';
+    });
+  }
+});
+
+// Read from URL params if coming from satellite page
+var params = new URLSearchParams(window.location.search);
+if (params.get('lat') && params.get('lon')) {
+  lat = parseFloat(params.get('lat'));
+  lon = parseFloat(params.get('lon'));
+  var locName = params.get('location') || (lat.toFixed(4) + 'N, ' + lon.toFixed(4) + 'E');
+  document.getElementById('loc-name').textContent = locName;
+  document.getElementById('loc-coords').textContent = lat.toFixed(4) + 'N · ' + lon.toFixed(4) + 'E';
+}
+
+function detectLocation() {
+  if (!navigator.geolocation) { alert('Geolocation not supported'); return; }
+  document.getElementById('loc-name').textContent = 'Detecting...';
+  navigator.geolocation.getCurrentPosition(function(p) {
+    lat = p.coords.latitude;
+    lon = p.coords.longitude;
+    document.getElementById('loc-name').textContent = lat.toFixed(4) + 'N, ' + lon.toFixed(4) + 'E';
+    document.getElementById('loc-coords').textContent = 'GPS location detected';
+    // Reverse geocode
+    fetch('https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lon + '&format=json')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var name = (d.address && (d.address.suburb || d.address.city || d.address.town || d.address.village)) || (lat.toFixed(4) + 'N');
+        document.getElementById('loc-name').textContent = name;
+      }).catch(function(){});
+  }, function() {
+    alert('Could not detect location. Please pick on map.');
+  });
+}
+
+var leafletMap = null, leafletMarker = null;
+function toggleMap() {
+  mapShowing = !mapShowing;
+  var box = document.getElementById('map-box');
+  if (mapShowing) {
+    box.style.display = 'block';
+    if (!leafletMap) {
+      var startLat = (lat && lon) ? lat : 20.5937;
+      var startLon = (lat && lon) ? lon : 78.9629;
+      leafletMap = L.map('map-iframe').setView([startLat, startLon], lat ? 13 : 5);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© OpenStreetMap'}).addTo(leafletMap);
+      if (lat && lon) {
+        leafletMarker = L.marker([lat, lon]).addTo(leafletMap).bindPopup('Your location').openPopup();
+      }
+      leafletMap.on('click', function(e) {
+        var clat = e.latlng.lat, clon = e.latlng.lng;
+        if (leafletMarker) leafletMap.removeLayer(leafletMarker);
+        leafletMarker = L.marker([clat, clon]).addTo(leafletMap).bindPopup('Selected!').openPopup();
+        fetch('https://nominatim.openstreetmap.org/reverse?lat='+clat+'&lon='+clon+'&format=json')
+          .then(function(r){return r.json();})
+          .then(function(d){
+            var name = (d.address && (d.address.suburb || d.address.city || d.address.town || d.address.village || d.address.county)) || (clat.toFixed(4)+'N, '+clon.toFixed(4)+'E');
+            lat = clat; lon = clon;
+            document.getElementById('loc-name').textContent = name;
+            document.getElementById('loc-coords').textContent = clat.toFixed(4)+'N · '+clon.toFixed(4)+'E';
+            setTimeout(function(){ box.style.display='none'; mapShowing=false; }, 800);
+          }).catch(function(){
+            lat = clat; lon = clon;
+            document.getElementById('loc-name').textContent = clat.toFixed(4)+'N, '+clon.toFixed(4)+'E';
+            document.getElementById('loc-coords').textContent = 'Custom location';
+            setTimeout(function(){ box.style.display='none'; mapShowing=false; }, 800);
+          });
+      });
+    } else {
+      setTimeout(function(){ leafletMap.invalidateSize(); }, 100);
+    }
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+function showTab(tab) {
+  document.getElementById('panel-sub').style.display = tab === 'sub' ? 'block' : 'none';
+  document.getElementById('panel-unsub').style.display = tab === 'unsub' ? 'block' : 'none';
+  document.getElementById('tab-sub').className = 'tab' + (tab === 'sub' ? ' active' : '');
+  document.getElementById('tab-unsub').className = 'tab' + (tab === 'unsub' ? ' active' : '');
+}
+
+async function sendReport() {
+  var phone = document.getElementById('phone').value.trim();
+  var email = document.getElementById('email').value.trim();
+  if (!phone && !email) { alert('Enter WhatsApp number or email!'); return; }
+  if (!lat || !lon) { alert('Please select your location first!'); return; }
+  var btn = document.getElementById('send-btn');
+  btn.disabled = true;
+  btn.textContent = 'Subscribing...';
+  try {
+    var token = localStorage.getItem('token') || '';
+    var locName = document.getElementById('loc-name').textContent;
+    var res = await fetch('/api/alerts/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ phone: phone, email: email, lat: lat, lon: lon, locationName: locName })
+    });
+    var data = await res.json();
+    if (data.success) {
+      document.getElementById('success-title').textContent = 'Subscribed!';
+      document.getElementById('success-msg').textContent = data.message || 'First report sent! Daily reports every morning at 6 AM. Reply STOP to WhatsApp to unsubscribe.';
+      document.getElementById('success-box').style.display = 'flex';
+      btn.textContent = '✅ Subscribed!';
+      btn.style.background = '#065f46';
+    } else {
+      alert(data.error || 'Failed to subscribe');
+      btn.textContent = '📲 Subscribe & Send First Report';
+      btn.disabled = false;
+    }
+  } catch(e) {
+    alert('Connection error. Please try again.');
+    btn.textContent = '📲 Subscribe & Send First Report';
+    btn.disabled = false;
+  }
+}
+
+async function unsubscribe() {
+  var contact = document.getElementById('unsub-contact').value.trim();
+  if (!contact) { alert('Enter your WhatsApp number or email'); return; }
+  var btn = document.getElementById('unsub-btn');
+  btn.disabled = true;
+  btn.textContent = 'Unsubscribing...';
+  try {
+    var res = await fetch('/api/alerts/unsubscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contact: contact })
+    });
+    var data = await res.json();
+    if (data.success) {
+      document.getElementById('success-title').textContent = 'Unsubscribed!';
+      document.getElementById('success-msg').textContent = 'You will no longer receive daily weather reports.';
+      document.getElementById('success-box').style.display = 'flex';
+      btn.textContent = '✅ Unsubscribed';
+    } else {
+      alert(data.error || 'Not found');
+      btn.textContent = '🚫 Unsubscribe from Daily Reports';
+      btn.disabled = false;
+    }
+  } catch(e) {
+    alert('Connection error');
+    btn.textContent = '🚫 Unsubscribe from Daily Reports';
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>
