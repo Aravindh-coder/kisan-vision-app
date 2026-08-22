@@ -86,11 +86,13 @@ router.post('/', async (req, res) => {
 
     if (!apiKey) return res.status(500).json({ error: 'GROQ_API_KEY not set in .env' })
 
+    const formatRule = ' IMPORTANT: Respond in plain conversational text only. Do NOT use markdown formatting — no asterisks, no double asterisks, no hash headers, no pipe tables, no bullet symbols like - or *. Write in clear paragraphs and simple numbered lists using plain numbers like 1. 2. 3. only.'
+
     const systemPrompt = lang === 'ta'
-      ? 'You are KISAN AI, expert agricultural scientist. Reply in Tamil. Give detailed farming advice.'
+      ? 'You are KISAN AI, expert agricultural scientist. Reply in Tamil. Give detailed farming advice.' + formatRule
       : lang === 'hi'
-      ? 'You are KISAN AI, expert agricultural scientist. Reply in Hindi. Give detailed farming advice.'
-      : 'You are KISAN AI, an expert agricultural scientist specializing in Indian farming, crops, soil science, and satellite remote sensing. Give comprehensive, detailed, actionable advice with specific quantities, product names, and timelines relevant to Indian agriculture.'
+      ? 'You are KISAN AI, expert agricultural scientist. Reply in Hindi. Give detailed farming advice.' + formatRule
+      : 'You are KISAN AI, an expert agricultural scientist specializing in Indian farming, crops, soil science, and satellite remote sensing. Give comprehensive, detailed, actionable advice with specific quantities, product names, and timelines relevant to Indian agriculture.' + formatRule
 
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -131,7 +133,7 @@ router.post('/ask', async (req, res) => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              contents: [{ parts: [{ text: `You are KISAN AI, expert agricultural scientist. Satellite data: ${context}. Question: ${question}. ${lang === 'hi' ? 'Answer in Hindi.' : lang === 'ta' ? 'Answer in Tamil.' : 'Answer in English.'} Give detailed expert answer with specific quantities and actionable advice in 5-6 sentences.` }] }],
+              contents: [{ parts: [{ text: `You are KISAN AI, expert agricultural scientist. Satellite data: ${context}. Question: ${question}. ${lang === 'hi' ? 'Answer in Hindi.' : lang === 'ta' ? 'Answer in Tamil.' : 'Answer in English.'} Give detailed expert answer with specific quantities and actionable advice in 5-6 sentences. Do not use markdown formatting, asterisks, or headers — plain text only.` }] }],
               generationConfig: { maxOutputTokens: 800, temperature: 0.7 }
             })
           }
@@ -161,11 +163,12 @@ router.post('/groq', async (req: any, res: any) => {
     const { question, context, lang } = req.body
     const apiKey = process.env.GROQ_API_KEY
     if (!apiKey) return res.status(500).json({ error: 'GROQ_API_KEY not set in .env' })
+    const formatRule = ' IMPORTANT: Respond in plain conversational text only. Do NOT use markdown formatting — no asterisks, no double asterisks, no hash headers, no pipe tables, no bullet symbols like - or *. Write in clear paragraphs and simple numbered lists using plain numbers like 1. 2. 3. only.'
     const systemPrompt = lang === 'ta'
-      ? 'You are KISAN AI, expert agricultural scientist. Reply in Tamil. Give detailed farming advice.'
+      ? 'You are KISAN AI, expert agricultural scientist. Reply in Tamil. Give detailed farming advice.' + formatRule
       : lang === 'hi'
-      ? 'You are KISAN AI, expert agricultural scientist. Reply in Hindi. Give detailed farming advice.'
-      : 'You are KISAN AI, an expert agricultural scientist specializing in Indian farming, crops, soil science, and satellite remote sensing. Give comprehensive, detailed, actionable advice with specific quantities, product names, and timelines relevant to Indian agriculture.'
+      ? 'You are KISAN AI, expert agricultural scientist. Reply in Hindi. Give detailed farming advice.' + formatRule
+      : 'You are KISAN AI, an expert agricultural scientist specializing in Indian farming, crops, soil science, and satellite remote sensing. Give comprehensive, detailed, actionable advice with specific quantities, product names, and timelines relevant to Indian agriculture.' + formatRule
     const userPrompt = context ? 'Farm data: ' + context + ' | Question: ' + question : question
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
