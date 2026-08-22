@@ -7,7 +7,7 @@ router.post('/groq', async (req: any, res: any) => {
     const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.GROQ_API_KEY },
-      body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages, max_tokens: max_tokens || 800, temperature: 0.7 })
+      body: JSON.stringify({ model: 'openai/gpt-oss-120b', messages, max_tokens: max_tokens || 800, temperature: 0.7 })
     })
     const d = await r.json()
     res.json(d)
